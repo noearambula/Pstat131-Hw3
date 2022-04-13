@@ -1,0 +1,13 @@
+---
+title: "Pstat131 Hw3"
+author: "Noe Arambula ID: 3561131"
+date: '2022-04-13'
+output:
+  html_document:
+    toc: true
+    toc_float: true
+  pdf_document:
+    toc: true
+---
+
+# Question 1
