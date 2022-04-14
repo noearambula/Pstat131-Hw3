@@ -3,45 +3,105 @@ title: "Pstat131 Hw3"
 author: "Noe Arambula ID: 3561131"
 date: '2022-04-13'
 output:
+  pdf_document:
+    toc: true
   html_document:
     toc: true
     toc_float: true
     code_folding: show
-  pdf_document:
-    toc: true
 ---
+
+# Loading libraries
+
+```{r message=FALSE}
+library(discrim)
+library(ggplot2)
+library(tidyverse)
+library(tidymodels)
+library(corrplot)
+library(ggthemes)
+tidymodels_prefer()
+library(readr)
+library(corrr)
+library(klaR)
+library(MASS)
+```
+
+# Read in csv data file and set seed
+
+```{r}
+titanic <- read_csv("titanic.csv")
+
+set.seed(777)
+```
+
+# Changing survived and pclass to factors
+
+```{r}
+titanic$survived =  factor(titanic$survived, levels = c("Yes", "No")) # Note can use parse_factor() in order to give a warning when there is a value not in the set
+titanic$pclass =  factor(titanic$pclass)
+
+class(titanic$survived)
+class(titanic$pclass)
+```
 
 # Question 1
 
 Split the data, stratifying on the outcome variable, `survived.` You should choose the proportions to split the data into. Verify that the training and testing data sets have the appropriate number of observations. Take a look at the training data and note any potential issues, such as missing data.
 
-Why is it a good idea to use stratified sampling for this data?
-
 ```{r}
+titanic_split <- initial_split(titanic, prop = 0.80,
+                               strata = survived)  
+titanic_train <- training(titanic_split)
+titanic_test <- testing(titanic_split)
 
-
-
+head(titanic_train)
 ```
+
+There are some missing values for age which could pose an issue. There are also missing values for cabin however this would mean they did not have a cabin could change cabin to true or false
+
+## Why is it a good idea to use stratified sampling for this data?.
+
+It is a good idea to use stratified sampling for this data because survived has 2 different levels and we want a proportionate amount of yes and no's for the data otherwise it could be skewed towards did not survive or not have any survived observations( yes value for survived)
 
 # Question 2
 
 Using the **training** data set, explore/describe the distribution of the outcome variable `survived.`
 
 ```{r}
-
-
+titanic_train %>% 
+  ggplot(aes(x = survived)) +
+  geom_bar()
 
 ```
+
+There are almost double the amount of people that did not survive then did survive i.e. the amount of No(did not survive) value is almost twice as big as Yes value
 
 # Question 3
 
 Using the **training** data set, create a correlation matrix of all continuous variables. Create a visualization of the matrix, and describe any patterns you see. Are any predictors correlated with each other? Which ones, and in which direction?
 
+## Correlation Matrix
+
 ```{r}
-
-
+titanic_train %>% 
+  select(where(is.numeric)) %>%
+  cor() %>% 
+  corrplot(type = 'lower',
+           method = 'number')
 
 ```
+
+##  Visualization of Correlation Matrix
+
+```{r message=FALSE}
+cor_titanic <- titanic_train %>%
+  select(where(is.numeric)) %>%
+  correlate()
+rplot(cor_titanic)
+```
+
+Age and sib_sp are negatively correlated and sib_sp and parch are positively correlated
 
 # Question 4
 
@@ -56,9 +116,13 @@ Recall that there were missing values for `age`. To deal with this, add an imput
 You'll need to investigate the `tidymodels` documentation to find the appropriate step functions to use.
 
 ```{r}
+titanic_recipe <- recipe(survived ~ pclass + sex + age + sib_sp + parch + fare, data = titanic_train) %>%
+  step_impute_linear(age) %>%  # imputes age to fix missing values
+  step_dummy(all_nominal_predictors()) %>%   # creates dummy variables
+  step_interact(terms = sex_male ~ fare) %>%    # Note: had to use sex_male since sex was made into a dummy variable
+  step_interact(terms = age ~ fare)  # Interactions created
 
-
-
+titanic_recipe
 ```
 
 # Question 5
@@ -68,8 +132,18 @@ Specify a **logistic regression** model for classification using the `"glm"` eng
 ***Hint: Make sure to store the results of `fit()`. You'll need them later on.***
 
 ```{r}
+# creating engine
+log_reg <- logistic_reg() %>% 
+  set_engine("glm") %>% 
+  set_mode("classification")
 
+ # creating workflow
+log_wkflow <- workflow() %>% 
+  add_model(log_reg) %>% 
+  add_recipe(titanic_recipe)
 
+ # using fit to apply workflow to training data
+log_fit <- fit(log_wkflow, titanic_train)
 
 ```
 
@@ -79,7 +153,18 @@ Specify a **logistic regression** model for classification using the `"glm"` eng
 
 ```{r}
 
+# creating engine
+lda_mod <- discrim_linear() %>% 
+  set_mode("classification") %>% 
+  set_engine("MASS")
 
+ # creating workflow
+lda_wkflow <- workflow() %>% 
+  add_model(lda_mod) %>% 
+  add_recipe(titanic_recipe)
+
+ # using fit to apply workflow to training data
+lda_fit <- fit(lda_wkflow, titanic_train)
 
 ```
 
@@ -88,8 +173,18 @@ Specify a **logistic regression** model for classification using the `"glm"` eng
 **Repeat Question 5**, but this time specify a quadratic discriminant analysis model for classification using the `"MASS"` engine.
 
 ```{r}
+# creating engine
+qda_mod <- discrim_quad() %>% 
+  set_mode("classification") %>% 
+  set_engine("MASS")
 
+ # creating workflow
+qda_wkflow <- workflow() %>% 
+  add_model(qda_mod) %>% 
+  add_recipe(titanic_recipe)
 
+ # using fit to apply workflow to training data
+qda_fit <- fit(qda_wkflow, titanic_train)
 
 ```
 
@@ -98,8 +193,19 @@ Specify a **logistic regression** model for classification using the `"glm"` eng
 **Repeat Question 5**, but this time specify a naive Bayes model for classification using the `"klaR"` engine. Set the `usekernel` argument to `FALSE`.
 
 ```{r}
+# creating engine
+nb_mod <- naive_Bayes() %>% 
+  set_mode("classification") %>% 
+  set_engine("klaR") %>% 
+  set_args(usekernel = FALSE) 
 
+ # creating workflow
+nb_wkflow <- workflow() %>% 
+  add_model(nb_mod) %>% 
+  add_recipe(titanic_recipe)
 
+ # using fit to apply workflow to training data
+nb_fit <- fit(nb_wkflow, titanic_train)
 
 ```
 
@@ -109,13 +215,69 @@ Now you've fit four different models to your training data.
 
 Use `predict()` and `bind_cols()` to generate predictions using each of these 4 models and your **training** data. Then use the *accuracy* metric to assess the performance of each of the four models.
 
-Which model achieved the highest accuracy on the training data?
+## Logistic Regression Model Predictions + Accuracy
 
 ```{r}
+titanic_log_pred <- predict(log_fit, new_data = titanic_train %>% select(-survived))
 
+titanic_log_pred = bind_cols(titanic_log_pred, titanic_train %>% select(survived))
 
+titanic_log_pred %>%
+  head
 
+log_acc <- augment(log_fit, new_data = titanic_train) %>%
+  accuracy(truth = survived, estimate = .pred_class)
+log_acc
 ```
+
+## Linear Discriminant Analysis Model Predictions + Accuracy
+
+```{r}
+titanic_lda_pred <- predict(lda_fit, new_data = titanic_train %>% select(-survived))
+
+titanic_lda_pred = bind_cols(titanic_lda_pred, titanic_train %>% select(survived))
+
+titanic_lda_pred %>%
+  head()
+
+lda_acc <- augment(lda_fit, new_data = titanic_train) %>%
+  accuracy(truth = survived, estimate = .pred_class)
+lda_acc
+```
+
+## Quadratic Discriminant Analysis Model Predictions + Accuracy
+
+```{r}
+titanic_qda_pred <- predict(qda_fit, new_data = titanic_train %>% select(-survived))
+
+titanic_qda_pred = bind_cols(titanic_qda_pred, titanic_train %>% select(survived))
+
+titanic_qda_pred %>%
+  head()
+
+qda_acc <- augment(qda_fit, new_data = titanic_train) %>%
+  accuracy(truth = survived, estimate = .pred_class)
+qda_acc
+```
+
+## Naive Bayes Model Predictions + Accuracy
+
+```{r warning=FALSE}
+titanic_nb_pred <- predict(nb_fit, new_data = titanic_train %>% select(-survived))
+
+titanic_nb_pred = bind_cols(titanic_nb_pred, titanic_train %>% select(survived))
+
+titanic_nb_pred %>%
+  head()
+
+nb_acc <- augment(nb_fit, new_data = titanic_train) %>%
+  accuracy(truth = survived, estimate = .pred_class)
+nb_acc
+```
+
+## Which model achieved the highest accuracy on the training data?
+
+The model that achieved the highest accuracy on the training data was the logistic Regression model with an accuracy of 0.81 or 81%
 
 # Question 10
 
@@ -123,10 +285,54 @@ Fit the model with the highest training accuracy to the **testing** data. Report
 
 Again using the **testing** data, create a confusion matrix and visualize it. Plot an ROC curve and calculate the area under it (AUC).
 
-How did the model perform? Compare its training and testing accuracies. If the values differ, why do you think this is so?
+## Fitting and Accuracy
 
 ```{r}
+# Fitting logistic model (model w/ highest accuracy) to testing data
+log_testing_fit <- fit(log_wkflow, titanic_test)
 
-
+  # Accuracy on testing data
+log_testing_acc <- augment(log_testing_fit, new_data = titanic_test) %>%
+  accuracy(truth = survived, estimate = .pred_class)
+log_testing_acc
 
 ```
+
+## Confusion Matrix and Visualization
+
+```{r}
+augment(log_testing_fit, new_data = titanic_test) %>%
+  conf_mat(truth = survived, estimate = .pred_class) %>%
+  autoplot(type = "heatmap")
+```
+
+## ROC Curve and AUC Calculation
+
+```{r}
+# Plot ROC curve
+augment(log_testing_fit, new_data = titanic_test) %>%
+  roc_curve(survived, .pred_Yes) %>%
+  autoplot()
+
+# Calculate AUC
+augment(log_testing_fit, new_data = titanic_test) %>%
+  roc_auc(survived, .pred_Yes) 
+```
+
+## How did the model perform? Compare its training and testing accuracies. If the values differ, why do you think this is so?
+
+The model performed fairly well at predicting those who did survive as the ROC curve is closer to the top left of the graph indicating a good performance if it was close to the diagnol dotted line the predictions would be no better than random guessing.
+
+In addition, we have an AUC of 87.3% which is pretty good as well as the higher it is the better, AUC tells how accurate the models predictions are.
+
+When we take a look at the confusion matrix above we can see that we have an overwhelming amount of true positives/negatives compared to a few false positives/negatives which is very good
+
+```{r}
+log_testing_acc
+
+log_acc
+```
+
+The testing accuracy was a little higher at 0.827 or 82.7% compared to the training accuracy of 81%
+
+The reason this might have been higher is that the training data might have just had points that were a little better suited for our model since we stratified the testing set it makes sense that the accuracy would be similar to both sets some variation.

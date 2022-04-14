@@ -1,5 +1,6 @@
 # Pstat 131 Hw 3
-install.packages('MASS')
+
+library(discrim)
 library(ggplot2)
 library(tidyverse)
 library(tidymodels)
@@ -61,12 +62,12 @@ rplot(cor_titanic)
 
 # Question 4
 titanic_recipe <- recipe(survived ~ pclass + sex + age + sib_sp + parch + fare, data = titanic_train) %>%
-  step_impute_linear(age, impute_with = imp_vars(all_predictors())) %>%  # imputes age to fix missing values
+  step_impute_linear(age) %>%  # imputes age to fix missing values
   step_dummy(all_nominal_predictors()) %>%   # creates dummy variables
   step_interact(terms = sex_male ~ fare) %>%    # Note: had to use sex_male since sex was made into a dummy variable
   step_interact(terms = age ~ fare)  # Interactions created
 
-View(titanic_recipe)
+titanic_recipe
 
 # Question 5
  # creating engine
@@ -128,16 +129,85 @@ nb_wkflow <- workflow() %>%
 nb_fit <- fit(nb_wkflow, titanic_train)
 
 # Question 9
+  # Logistic Regression Model Predictions + Accuracy
+titanic_log_pred <- predict(log_fit, new_data = titanic_train %>% select(-survived))
 
+titanic_log_pred = bind_cols(titanic_log_pred, titanic_train %>% select(survived))
+
+titanic_log_pred %>%
+  head
+
+log_acc <- augment(log_fit, new_data = titanic_train) %>%
+  accuracy(truth = survived, estimate = .pred_class)
+log_acc
+
+  # Linear Discriminant Analysis Model Predictions + Accuracy
+titanic_lda_pred <- predict(lda_fit, new_data = titanic_train %>% select(-survived))
+
+titanic_lda_pred = bind_cols(titanic_lda_pred, titanic_train %>% select(survived))
+
+titanic_lda_pred %>%
+  head()
+
+lda_acc <- augment(lda_fit, new_data = titanic_train) %>%
+  accuracy(truth = survived, estimate = .pred_class)
+lda_acc
+
+  # Quadratic Discriminant Analysis Model Predictions + Accuracy
+titanic_qda_pred <- predict(qda_fit, new_data = titanic_train %>% select(-survived))
+
+titanic_qda_pred = bind_cols(titanic_qda_pred, titanic_train %>% select(survived))
+
+titanic_qda_pred %>%
+  head()
+
+qda_acc <- augment(qda_fit, new_data = titanic_train) %>%
+  accuracy(truth = survived, estimate = .pred_class)
+qda_acc
+
+  #  Naive Bayes Model Predictions + Accuracy
+titanic_nb_pred <- predict(nb_fit, new_data = titanic_train %>% select(-survived))
+
+titanic_nb_pred = bind_cols(titanic_nb_pred, titanic_train %>% select(survived))
+
+titanic_nb_pred %>%
+  head()
+
+nb_acc <- augment(nb_fit, new_data = titanic_train) %>%
+  accuracy(truth = survived, estimate = .pred_class)
+nb_acc
+
+  # The model that achieved the highest accuracy on the training data was the logistic Regression model with an accuracy of 0.81 or 81%
 
 # Question 10
 
-# to calculate auc simply do auc(roc())
+  # Fitting logistic model (model w/ highest accuracy) to testing data
+log_testing_fit <- fit(log_wkflow, titanic_test)
 
+  # Accuracy on testing data
+log_testing_acc <- augment(log_testing_fit, new_data = titanic_test) %>%
+  accuracy(truth = survived, estimate = .pred_class)
+log_testing_acc
 
+  # Create confusion matrix and Visualize it
+augment(log_testing_fit, new_data = titanic_test) %>%
+  conf_mat(truth = survived, estimate = .pred_class) %>%
+  autoplot(type = "heatmap")
 
+  # Plot ROC curve
+augment(log_testing_fit, new_data = titanic_test) %>%
+  roc_curve(survived, .pred_Yes) %>%
+  autoplot()
 
+  # Calculate AUC
+augment(log_testing_fit, new_data = titanic_test) %>%
+  roc_auc(survived, .pred_Yes) 
 
+# The model performed fairly well at predicting those who did survive as the ROC curve is closer to the top left of the graph indicating a good performance if it was close to the diagnol dotted line the predictions would be no better than random guessing
+# In addition, we have an AUC of 87.3% which is pretty good as well as the higher it is the better, AUC tells how accurate the models predictions are
+# When we take a look at the confusion matrix we can see that we have an overwhelming amount of true positives/negatives compared to a few false positives/negatives which is very good
+log_testing_acc
+log_acc
 
-
-
+# The testing accuracy was a little higher at 0.827 or 82.7% compared to the training accuracy of 81%
+# The reason this might have been higher is that the training data might have just had points that were a little better suited for our model since we stratified the testing set it makes sense that the accuracy would be similar to both sets some variation
