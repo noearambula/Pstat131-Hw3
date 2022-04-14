@@ -52,6 +52,7 @@ head(titanic_train)
 
 # Question 10
 
+# to calculate auc simply do auc(roc())
 
 
 
